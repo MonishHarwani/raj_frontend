@@ -28,7 +28,8 @@ export const SocketProvider = ({ children }) => {
           },
         }
       );
-
+      console.log(" Sockjet Conn ");
+      console.log(newSocket);
       newSocket.on("connect", () => {
         console.log("Socket connected");
         setSocket(newSocket);

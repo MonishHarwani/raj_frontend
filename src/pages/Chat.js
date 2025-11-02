@@ -1,463 +1,267 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import {
+  MessageCircle,
+  Search,
+  Plus,
+  Users,
+  ArrowLeft,
+  Settings2,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import { useChat } from "../context/ChatContext";
 import { useAuth } from "../context/AuthContext";
-import { useSocket } from "../context/SocketContext";
-import { Send, ArrowLeft, User, Search, MoreVertical } from "lucide-react";
-import api from "../utils/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import { formatDateTime, generateChatId } from "../utils/helpers";
+import ConversationList from "../components/chat/ConversationList";
+import ChatWindow from "../components/chat/ChatWindow";
+import NewChatModal from "../components/chat/NewChatModal";
 
 const Chat = () => {
-  const { chatId } = useParams();
-  const [conversations, setConversations] = useState([]);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [sendingMessage, setSendingMessage] = useState(false);
+  const { conversationId } = useParams();
   const [searchTerm, setSearchTerm] = useState("");
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState(
+    conversationId || null
+  );
+  const [isMobileView, setIsMobileView] = useState(false);
 
-  const messagesEndRef = useRef(null);
-  const { user } = useAuth();
   const {
-    socket,
-    joinChat,
-    sendMessage,
-    startTyping,
-    stopTyping,
-    isUserOnline,
-    isUserTyping,
-  } = useSocket();
+    conversations,
+    currentConversation,
+    loading,
+    selectConversation,
+    setCurrentConversation,
+  } = useChat();
+  const { user } = useAuth();
 
   useEffect(() => {
-    loadConversations();
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth < 768);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
-    if (chatId) {
-      loadChatMessages(chatId);
-      setSelectedChat(chatId);
-      joinChat(chatId);
+    if (conversationId && conversations.length > 0) {
+      const conversation = conversations.find(
+        (conv) => conv.id === conversationId
+      );
+      if (conversation) {
+        selectConversation(conversation);
+        setSelectedConversationId(conversationId);
+      }
     }
-  }, [chatId, joinChat]);
+  }, [conversationId, conversations]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    if (socket) {
-      socket.on("newMessage", (message) => {
-        if (message.chatId === selectedChat) {
-          setMessages((prev) => [...prev, message]);
-        }
-        // Update conversation list
-        loadConversations();
-      });
-
-      return () => {
-        socket.off("newMessage");
-      };
-    }
-  }, [socket, selectedChat]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const handleConversationSelect = (conversation) => {
+    selectConversation(conversation);
+    setSelectedConversationId(conversation.id);
   };
 
-  const loadConversations = async () => {
-    try {
-      const response = await api.get("/messages/conversations");
-      setConversations(response.data.conversations);
-    } catch (error) {
-      console.error("Error loading conversations:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadChatMessages = async (chatId) => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/messages/${chatId}`);
-      setMessages(response.data.messages);
-    } catch (error) {
-      console.error("Error loading messages:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-
-    if (!newMessage.trim() || !selectedChat || sendingMessage) return;
-
-    const messageContent = newMessage.trim();
-    setNewMessage("");
-    setSendingMessage(true);
-
-    try {
-      // Find the other user in the chat
-      const otherUserId = selectedChat
-        .split("_")
-        .find((id) => parseInt(id) !== user.id);
-
-      const messageData = {
-        receiverId: parseInt(otherUserId),
-        content: messageContent,
-        chatId: selectedChat,
-      };
-
-      // Send via socket for real-time delivery
-      sendMessage(messageData);
-
-      // Also send via API for persistence
-      await api.post("/messages", messageData);
-
-      stopTyping(selectedChat);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setNewMessage(messageContent); // Restore message on error
-    } finally {
-      setSendingMessage(false);
-    }
-  };
-
-  const handleTyping = () => {
-    if (selectedChat) {
-      startTyping(selectedChat);
-    }
+  const handleBackToList = () => {
+    setSelectedConversationId(null);
+    setCurrentConversation(null);
   };
 
   const filteredConversations = conversations.filter(
-    (conv) =>
-      conv.partner &&
-      `${conv.partner.firstName} ${conv.partner.lastName}`
-        .toLowerCase()
+    (conversation) =>
+      conversation.otherUser?.firstName
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      conversation.otherUser?.lastName
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      conversation.lastMessage?.content
+        ?.toLowerCase()
         .includes(searchTerm.toLowerCase())
   );
 
-  if (loading && conversations.length === 0) {
-    return <LoadingSpinner text="Loading conversations..." />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-100/30 flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-200/50">
+              <MessageCircle className="w-8 h-8 text-white animate-pulse" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-400 rounded-full animate-ping"></div>
+          </div>
+          <p className="text-gray-600 font-medium">Loading conversations...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex">
-      {/* Conversations Sidebar */}
+    <div
+      className="h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/20 flex overflow-hidden"
+      style={{ maxHeight: "90vh" }}
+    >
+      {/* Sidebar - Ultra Modern Design */}
       <div
-        className={`w-full md:w-80 bg-white border-r border-gray-200 flex flex-col ${
-          selectedChat ? "hidden md:flex" : "flex"
-        }`}
+        className={`
+        ${isMobileView ? (selectedConversationId ? "hidden" : "flex") : "flex"}
+        ${isMobileView ? "w-full" : "w-80"}
+        flex-col backdrop-blur-xl bg-white/80 border-r border-gray-200/50 shadow-xl
+      `}
       >
-        <div className="p-4 border-b border-gray-200">
-          <h1 className="text-xl font-semibold text-gray-900 mb-3">Messages</h1>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              className="form-input pl-10 w-full"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        {/* Glassmorphism Header */}
+        <div className="relative">
+          {/* Background Blur Effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/90 to-indigo-700/90 backdrop-blur-sm"></div>
+          <div className="absolute inset-0 bg-white/10"></div>
+
+          <div className="relative p-6 text-white">
+            {/* Top Section */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+                    <MessageCircle className="w-6 h-6" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text">
+                    Messages
+                  </h1>
+                  <p className="text-blue-100/80 text-sm font-medium">
+                    {conversations.length} active chats
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setShowNewChatModal(true)}
+                  className="group p-2.5 bg-white/20 rounded-xl hover:bg-white/30 transition-all duration-300 backdrop-blur-sm border border-white/20 hover:scale-105 active:scale-95"
+                  title="Start new chat"
+                >
+                  <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+                <button className="p-2.5 bg-white/20 rounded-xl hover:bg-white/30 transition-all duration-300 backdrop-blur-sm border border-white/20 hover:scale-105 active:scale-95">
+                  <Settings2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modern Search Bar */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-white/10 rounded-2xl backdrop-blur-sm"></div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/70" />
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-transparent border border-white/20 rounded-2xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/40 transition-all duration-300"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* Conversations List */}
         <div className="flex-1 overflow-y-auto">
           {filteredConversations.length > 0 ? (
-            filteredConversations.map((conversation) => (
-              <ConversationItem
-                key={conversation.chatId}
-                conversation={conversation}
-                isSelected={selectedChat === conversation.chatId}
-                onClick={() => {
-                  setSelectedChat(conversation.chatId);
-                  loadChatMessages(conversation.chatId);
-                  joinChat(conversation.chatId);
-                }}
-                isOnline={isUserOnline(conversation.partner?.id)}
-              />
-            ))
+            <ConversationList
+              conversations={filteredConversations}
+              selectedConversationId={selectedConversationId}
+              onConversationSelect={handleConversationSelect}
+              currentUserId={user?.id}
+            />
           ) : (
-            <div className="text-center p-8">
-              <div className="text-4xl mb-4">💬</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No conversations yet
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+              <div className="relative mb-6">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-3xl flex items-center justify-center shadow-lg">
+                  <Users className="w-12 h-12 text-blue-400" />
+                </div>
+                <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {searchTerm ? "No conversations found" : "Ready to connect?"}
               </h3>
-              <p className="text-gray-600">
-                Start a conversation by applying to a job or contacting a
-                photographer.
+              <p className="text-gray-600 mb-8 max-w-sm leading-relaxed">
+                {searchTerm
+                  ? "Try searching with different keywords"
+                  : "Start meaningful conversations with photographers and clients in your network"}
               </p>
+              {!searchTerm && (
+                <button
+                  onClick={() => setShowNewChatModal(true)}
+                  className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-semibold shadow-xl shadow-blue-200/50 hover:scale-105 active:scale-95 flex items-center space-x-2"
+                >
+                  <Zap className="w-5 h-5 group-hover:animate-bounce" />
+                  <span>Start Your First Chat</span>
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Chat Area */}
+      {/* Chat Window */}
       <div
-        className={`flex-1 flex flex-col ${
-          selectedChat ? "flex" : "hidden md:flex"
-        }`}
+        className={`
+        ${isMobileView ? (selectedConversationId ? "flex" : "hidden") : "flex"}
+        flex-1 flex-col bg-gradient-to-br from-gray-50/50 to-white/80 backdrop-blur-xl
+      `}
       >
-        {selectedChat ? (
-          <>
-            {/* Chat Header */}
-            <ChatHeader
-              conversation={conversations.find(
-                (c) => c.chatId === selectedChat
-              )}
-              onBack={() => setSelectedChat(null)}
-            />
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {loading ? (
-                <div className="flex justify-center">
-                  <LoadingSpinner size="sm" text="Loading messages..." />
-                </div>
-              ) : (
-                messages.map((message, index) => (
-                  <MessageBubble
-                    key={message.id || index}
-                    message={message}
-                    isOwn={message.senderId === user.id}
-                    showAvatar={
-                      index === 0 ||
-                      messages[index - 1].senderId !== message.senderId
-                    }
-                  />
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Message Input */}
-            <MessageInput
-              value={newMessage}
-              onChange={(value) => {
-                setNewMessage(value);
-                handleTyping();
-              }}
-              onSend={handleSendMessage}
-              disabled={sendingMessage}
-              placeholder="Type a message..."
-            />
-          </>
+        {currentConversation ? (
+          <ChatWindow
+            conversation={currentConversation}
+            onBack={handleBackToList}
+            isMobile={isMobileView}
+          />
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4">💬</div>
-              <h3 className="text-xl font-medium text-gray-900 mb-2">
-                Select a conversation
-              </h3>
-              <p className="text-gray-600">
-                Choose a conversation from the sidebar to start messaging.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const ConversationItem = ({ conversation, isSelected, onClick, isOnline }) => {
-  if (!conversation.partner) return null;
-
-  return (
-    <div
-      className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-        isSelected ? "bg-blue-50 border-blue-200" : ""
-      }`}
-      onClick={onClick}
-    >
-      <div className="flex items-center space-x-3">
-        <div className="relative">
-          {conversation.partner.profilePhoto ? (
-            <img
-              src={conversation.partner.profilePhoto}
-              alt={conversation.partner.firstName}
-              className="w-12 h-12 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center">
-              <User className="h-6 w-6 text-white" />
-            </div>
-          )}
-          {isOnline && (
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-gray-900 truncate">
-              {conversation.partner.firstName} {conversation.partner.lastName}
-            </h3>
-            <span className="text-xs text-gray-500">
-              {formatDateTime(conversation.lastMessage.createdAt)}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600 truncate">
-              {conversation.lastMessage.sender.id === conversation.partner.id
-                ? ""
-                : "You: "}
-              {conversation.lastMessage.content}
-            </p>
-            {conversation.unreadCount > 0 && (
-              <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-xs font-medium text-white">
-                  {conversation.unreadCount > 9
-                    ? "9+"
-                    : conversation.unreadCount}
-                </span>
+            <div className="text-center p-8 max-w-md">
+              <div className="relative mb-8">
+                <div className="w-32 h-32 bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-blue-200/30">
+                  <MessageCircle className="w-16 h-16 text-blue-500" />
+                </div>
+                <div className="absolute -top-3 -right-3 w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div className="absolute -bottom-3 -left-3 w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ChatHeader = ({ conversation, onBack }) => {
-  if (!conversation?.partner) return null;
-
-  return (
-    <div className="bg-white border-b border-gray-200 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={onBack}
-            className="md:hidden text-gray-500 hover:text-gray-700"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-
-          <Link
-            to={`/profile/${conversation.partner.id}`}
-            className="flex items-center space-x-3"
-          >
-            {conversation.partner.profilePhoto ? (
-              <img
-                src={conversation.partner.profilePhoto}
-                alt={conversation.partner.firstName}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
-                <User className="h-5 w-5 text-white" />
-              </div>
-            )}
-
-            <div>
-              <h2 className="font-medium text-gray-900">
-                {conversation.partner.firstName} {conversation.partner.lastName}
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">
+                Welcome to Messages
               </h2>
-              <p className="text-sm text-gray-500">
-                {conversation.partner.role === "photographer"
-                  ? "Photographer"
-                  : "Client"}
+              <p className="text-gray-600 mb-10 leading-relaxed text-lg">
+                Select a conversation from the sidebar or create a new chat to
+                start connecting with your network
               </p>
+              <button
+                onClick={() => setShowNewChatModal(true)}
+                className="group px-10 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-2xl hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 transition-all duration-500 font-semibold shadow-2xl shadow-indigo-200/50 hover:scale-105 active:scale-95 flex items-center space-x-3 mx-auto"
+              >
+                <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Start New Conversation</span>
+              </button>
             </div>
-          </Link>
-        </div>
-
-        <button className="text-gray-500 hover:text-gray-700">
-          <MoreVertical className="h-5 w-5" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const MessageBubble = ({ message, isOwn, showAvatar }) => {
-  return (
-    <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`flex items-end space-x-2 max-w-xs lg:max-w-md ${
-          isOwn ? "flex-row-reverse space-x-reverse" : "flex-row"
-        }`}
-      >
-        {!isOwn && showAvatar && (
-          <div className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0">
-            {message.sender?.profilePhoto ? (
-              <img
-                src={message.sender.profilePhoto}
-                alt={message.sender.firstName}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                <User className="h-4 w-4 text-white" />
-              </div>
-            )}
           </div>
         )}
-
-        {!isOwn && !showAvatar && <div className="w-8 h-8 flex-shrink-0"></div>}
-
-        <div
-          className={`px-4 py-2 rounded-2xl ${
-            isOwn
-              ? "bg-blue-600 text-white rounded-br-md"
-              : "bg-gray-200 text-gray-900 rounded-bl-md"
-          }`}
-        >
-          <p className="text-sm whitespace-pre-wrap break-words">
-            {message.content}
-          </p>
-          <p
-            className={`text-xs mt-1 ${
-              isOwn ? "text-blue-100" : "text-gray-500"
-            }`}
-          >
-            {formatDateTime(message.createdAt)}
-          </p>
-        </div>
       </div>
-    </div>
-  );
-};
 
-const MessageInput = ({ value, onChange, onSend, disabled, placeholder }) => {
-  return (
-    <div className="bg-white border-t border-gray-200 p-4">
-      <form onSend={onSend} className="flex items-end space-x-3">
-        <div className="flex-1">
-          <textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="form-input resize-none"
-            rows={1}
-            style={{
-              minHeight: "44px",
-              maxHeight: "120px",
-              overflowY: value.split("\n").length > 3 ? "scroll" : "hidden",
-            }}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                onSend(e);
-              }
-            }}
-            disabled={disabled}
-          />
-        </div>
-
-        <button
-          type="submit"
-          onClick={onSend}
-          disabled={!value.trim() || disabled}
-          className="btn btn-primary p-3"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </form>
+      {/* New Chat Modal */}
+      <NewChatModal
+        isOpen={showNewChatModal}
+        onClose={() => setShowNewChatModal(false)}
+        onConversationCreated={handleConversationSelect}
+      />
     </div>
   );
 };

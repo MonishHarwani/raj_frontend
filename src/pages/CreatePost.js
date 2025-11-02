@@ -39,7 +39,7 @@ const CreatePost = () => {
   const [errors, setErrors] = useState({});
   const [tagInput, setTagInput] = useState("");
 
-  const { user } = useAuth();
+  const { user, isHirer } = useAuth();
   const navigate = useNavigate();
 
   // Load stock photos on component mount
@@ -298,7 +298,7 @@ const CreatePost = () => {
               </label>
 
               <div className="flex space-x-4 mb-4">
-                <button
+                {/* <button
                   type="button"
                   onClick={() => setShowStockPhotos(false)}
                   className={`flex items-center px-4 py-2 rounded-lg border ${
@@ -309,7 +309,7 @@ const CreatePost = () => {
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Photos
-                </button>
+                </button> */}
                 {/* <button
                   type="button"
                   onClick={() => setShowStockPhotos(true)}
@@ -579,22 +579,24 @@ const CreatePost = () => {
             </div>
 
             {/* Job Post Toggle */}
-            <div className="flex items-center space-x-3">
-              <input
-                type="checkbox"
-                id="isJobPost"
-                name="isJobPost"
-                checked={formData.isJobPost}
-                onChange={handleChange}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <label
-                htmlFor="isJobPost"
-                className="text-sm font-medium text-gray-700"
-              >
-                This is a job opportunity post
-              </label>
-            </div>
+            {isHirer && (
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="isJobPost"
+                  name="isJobPost"
+                  checked={formData.isJobPost}
+                  onChange={handleChange}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label
+                  htmlFor="isJobPost"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  This is a job opportunity post
+                </label>
+              </div>
+            )}
 
             {/* Job-specific fields */}
             {formData.isJobPost && (

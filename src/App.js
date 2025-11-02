@@ -3,6 +3,7 @@ import { BrowserRouter as Router } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { ChatProvider } from "./context/ChatContext"; // Add this
 import AppRoutes from "./components/AppRoutes";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -13,9 +14,13 @@ function App() {
         <AuthProvider>
           <SocketProvider>
             <NotificationProvider>
-              <div className="App">
-                <AppRoutes />
-              </div>
+              <ChatProvider>
+                {" "}
+                {/* Add ChatProvider here */}
+                <div className="App">
+                  <AppRoutes />
+                </div>
+              </ChatProvider>
             </NotificationProvider>
           </SocketProvider>
         </AuthProvider>

@@ -20,6 +20,11 @@ import api from "../utils/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import JobApplicationModal from "../components/JobApplicationModal";
 import { formatDate } from "../utils/helpers";
+import { useChat } from "../context/ChatContext";
+import { useNavigate } from "react-router-dom";
+import MessageButton from "../components/chat/MessageButton";
+// import { MessageCircle } from "lucide-react";
+// import MessageButton from "../components/chat/MessageButton";
 
 const Posts = () => {
   const [posts, setPosts] = useState([]);
@@ -60,7 +65,9 @@ const Posts = () => {
       setLoading(false);
     }
   };
-
+  // In your component
+  const { startConversation } = useChat();
+  const navigate = useNavigate();
   // Add this missing function
   const loadUserApplications = async () => {
     try {
@@ -613,9 +620,16 @@ const PostCard = ({
               </p>
             )}
 
-            {/* Application Status or Apply Button */}
+            {post.location && (
+              <p className="text-xs text-green-700 mb-2">
+                Location: {post.location}
+              </p>
+            )}
+
+            {/* Actions for non-owners */}
             {isAuthenticated && currentUserId !== post.user?.id && (
-              <div className="mt-3">
+              <div className="mt-3 space-y-2">
+                {/* Application Status or Apply Button */}
                 {userApplication ? (
                   <div className="flex items-center space-x-2">
                     {(() => {
@@ -623,7 +637,7 @@ const PostCard = ({
                       const Icon = status.icon;
                       return (
                         <div
-                          className={`flex items-center space-x-2 px-3 py-2 rounded-full ${status.bg}`}
+                          className={`flex items-center space-x-2 px-3 py-2 rounded-full ${status.bg} flex-1`}
                         >
                           <Icon className={`h-4 w-4 ${status.color}`} />
                           <span
@@ -648,18 +662,45 @@ const PostCard = ({
                     Apply Now
                   </button>
                 )}
+
+                {/* Message Hirer Button - Inline Version */}
+                {/* Message Hirer Button - Full Featured */}
+                <MessageButton
+                  userId={post.user?.id}
+                  userName={`${post.user?.firstName} ${post.user?.lastName}`}
+                  userPhoto={post.user?.profilePhoto}
+                  variant="outline"
+                  size="md"
+                  fullWidth={true}
+                  rounded="md"
+                  className="border-green-300 text-green-700 hover:bg-green-100 hover:border-green-400 mt-2"
+                  loadingText="Starting conversation..."
+                  successText="Opening chat..."
+                  errorText="Failed to connect"
+                  tooltip={true}
+                >
+                  💬 Message Hirer
+                </MessageButton>
               </div>
             )}
 
-            {/* Show for job poster */}
+            {/* Actions for job poster */}
             {isAuthenticated && currentUserId === post.user?.id && (
-              <div className="mt-3">
+              <div className="mt-3 space-y-2">
                 <Link
                   to={`/dashboard/job-applications/${post.id}`}
                   className="w-full btn btn-secondary text-sm py-2 text-center block"
                 >
                   View Applications ({post.applicationsCount || 0})
                 </Link>
+
+                {/* Optional: Quick stats for job poster */}
+                {post.applicationsCount > 0 && (
+                  <div className="text-xs text-green-600 text-center">
+                    💼 You have {post.applicationsCount} application
+                    {post.applicationsCount !== 1 ? "s" : ""} to review
+                  </div>
+                )}
               </div>
             )}
           </div>

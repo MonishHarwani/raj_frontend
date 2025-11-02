@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   Camera,
   MapPin,
   Globe,
   Phone,
-  Mail,
   Edit,
   MessageCircle,
   Star,
   Calendar,
+  Trash2,
+  Heart,
+  MessageSquare,
+  Eye,
 } from "lucide-react";
 import api from "../utils/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import { formatDate, generateChatId } from "../utils/helpers";
+import { formatDate } from "../utils/helpers";
+import { useChat } from "../context/ChatContext";
 
 const Profile = () => {
   const { id } = useParams();
@@ -24,6 +28,9 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("portfolio");
 
+  const { startConversation } = useChat();
+  const navigate = useNavigate();
+
   const isOwnProfile = user && parseInt(id || user.id) === user.id;
 
   useEffect(() => {
@@ -31,6 +38,7 @@ const Profile = () => {
     if (userId) {
       loadProfile(userId);
     }
+    // eslint-disable-next-line
   }, [id, user]);
 
   const loadProfile = async (userId) => {
@@ -46,10 +54,29 @@ const Profile = () => {
     }
   };
 
-  const handleStartChat = () => {
-    if (!user || !profileUser) return;
-    const chatId = generateChatId(user.id, profileUser.id);
-    window.location.href = `/dashboard/chat/${chatId}`;
+  const handleStartChat = async () => {
+    try {
+      const conversation = await startConversation(profileUser.id);
+      navigate(`/dashboard/chat/${conversation.id}`);
+    } catch (error) {
+      alert("Failed to start conversation");
+    }
+  };
+
+  // Delete post handler
+  const handleDeletePost = async (postId) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this post? This action cannot be undone."
+      )
+    )
+      return;
+    try {
+      await api.delete(`/posts/${postId}`);
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch (error) {
+      alert("Failed to delete post.");
+    }
   };
 
   if (loading) {
@@ -58,7 +85,7 @@ const Profile = () => {
 
   if (!profileUser) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Profile not found
@@ -81,7 +108,7 @@ const Profile = () => {
             <div className="flex-shrink-0 mb-6 md:mb-0">
               {profileUser.profilePhoto ? (
                 <img
-                  src={profileUser.profilePhoto}
+                  src={"http://localhost:5000" + profileUser.profilePhoto}
                   alt={profileUser.firstName}
                   className="w-32 h-32 rounded-full object-cover mx-auto md:mx-0"
                 />
@@ -168,25 +195,24 @@ const Profile = () => {
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row justify-center md:justify-start gap-3">
                 {isOwnProfile ? (
-                  <Link to="/dashboard/profile" className="btn btn-primary">
+                  <Link
+                    to="/dashboard/profile/edit"
+                    className="btn btn-primary"
+                  >
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Profile
                   </Link>
                 ) : (
-                  isAuthenticated && (
-                    <>
-                      <button
-                        onClick={handleStartChat}
-                        className="btn btn-primary"
-                      >
-                        <MessageCircle className="h-4 w-4 mr-2" />
-                        Send Message
-                      </button>
-                      <button className="btn btn-secondary">
-                        <Star className="h-4 w-4 mr-2" />
-                        Save
-                      </button>
-                    </>
+                  isAuthenticated &&
+                  user &&
+                  user.id !== profileUser.id && (
+                    <button
+                      onClick={handleStartChat}
+                      className="btn btn-secondary flex items-center space-x-2"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span>Message</span>
+                    </button>
                   )
                 )}
               </div>
@@ -241,7 +267,11 @@ const Profile = () => {
 
         {/* Tab Content */}
         {activeTab === "portfolio" && (
-          <PortfolioTab posts={posts} isOwnProfile={isOwnProfile} />
+          <PortfolioTab
+            posts={posts}
+            isOwnProfile={isOwnProfile}
+            onDeletePost={handleDeletePost}
+          />
         )}
 
         {activeTab === "reviews" && <ReviewsTab profileUser={profileUser} />}
@@ -252,7 +282,7 @@ const Profile = () => {
   );
 };
 
-const PortfolioTab = ({ posts, isOwnProfile }) => {
+const PortfolioTab = ({ posts, isOwnProfile, onDeletePost }) => {
   if (posts.length === 0) {
     return (
       <div className="text-center py-12">
@@ -275,22 +305,52 @@ const PortfolioTab = ({ posts, isOwnProfile }) => {
   }
 
   return (
-    <div className="photo-grid">
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
       {posts.map((post) => (
-        <div key={post.id} className="photo-card">
+        <div
+          key={post.id}
+          className="relative rounded-lg overflow-hidden shadow group bg-white transition hover:shadow-lg"
+        >
+          {/* Delete Post (only for own profile) */}
+          {isOwnProfile && (
+            <button
+              onClick={() => onDeletePost(post.id)}
+              className="absolute top-3 right-3 z-10 bg-red-600 hover:bg-red-700 text-white rounded-full p-2 shadow-md transition"
+              title="Delete Post"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          )}
           <Link to={`/posts/${post.id}`}>
             {post.photos && post.photos[0] && (
               <img
-                src={post.photos[0].url}
+                src={"http://localhost:5000" + post.photos[0].url}
                 alt={post.title}
-                className="img-cover"
+                className="w-full h-60 object-cover group-hover:scale-105 transition-transform duration-300"
               />
             )}
-            <div className="photo-overlay">
-              <h3 className="font-semibold mb-1">{post.title}</h3>
-              <p className="text-sm opacity-90">
-                {post.likesCount} likes • {post.commentsCount} comments
+            <div className="p-4">
+              <h3 className="font-semibold mb-1 truncate">{post.title}</h3>
+              <p className="text-xs text-gray-500 line-clamp-2">
+                {post.description}
               </p>
+              <div className="flex items-center gap-4 text-xs text-gray-400 mt-3">
+                <span className="flex items-center gap-1">
+                  <Heart className="w-4 h-4" />
+                  {post.likesCount || 0}
+                </span>
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="w-4 h-4" />
+                  {post.commentsCount || 0}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Eye className="w-4 h-4" />
+                  {post.viewsCount || 0}
+                </span>
+              </div>
+              <span className="block mt-2 text-xs text-gray-400">
+                {formatDate(post.createdAt)}
+              </span>
             </div>
           </Link>
         </div>
@@ -299,68 +359,60 @@ const PortfolioTab = ({ posts, isOwnProfile }) => {
   );
 };
 
-const ReviewsTab = ({ profileUser }) => {
-  return (
-    <div className="text-center py-12">
-      <Star className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-      <h3 className="text-xl font-medium text-gray-900 mb-2">No reviews yet</h3>
-      <p className="text-gray-600">
-        Reviews will appear here once clients start rating this photographer's
-        work.
-      </p>
-    </div>
-  );
-};
+const ReviewsTab = ({ profileUser }) => (
+  <div className="text-center py-12">
+    <Star className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+    <h3 className="text-xl font-medium text-gray-900 mb-2">No reviews yet</h3>
+    <p className="text-gray-600">
+      Reviews will appear here once clients start rating this photographer's
+      work.
+    </p>
+  </div>
+);
 
-const AboutTab = ({ profileUser }) => {
-  return (
-    <div className="max-w-3xl">
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">About</h3>
+const AboutTab = ({ profileUser }) => (
+  <div className="max-w-3xl">
+    <div className="bg-white rounded-lg shadow-sm p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">About</h3>
+      {profileUser.bio ? (
+        <div>
+          <p className="text-gray-700 whitespace-pre-wrap">{profileUser.bio}</p>
+        </div>
+      ) : (
+        <p className="text-gray-500 italic">No bio available.</p>
+      )}
 
-        {profileUser.bio ? (
-          <div className="prose max-w-none">
-            <p className="text-gray-700 whitespace-pre-wrap">
-              {profileUser.bio}
-            </p>
+      <div className="mt-6 space-y-4">
+        {profileUser.location && (
+          <div>
+            <h4 className="font-medium text-gray-900 mb-1">Location</h4>
+            <p className="text-gray-700">{profileUser.location}</p>
           </div>
-        ) : (
-          <p className="text-gray-500 italic">No bio available.</p>
         )}
 
-        {/* Additional Info */}
-        <div className="mt-6 space-y-4">
-          {profileUser.location && (
-            <div>
-              <h4 className="font-medium text-gray-900 mb-1">Location</h4>
-              <p className="text-gray-700">{profileUser.location}</p>
-            </div>
-          )}
-
-          {profileUser.specialties && profileUser.specialties.length > 0 && (
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Specialties</h4>
-              <div className="flex flex-wrap gap-2">
-                {profileUser.specialties.map((specialty, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                  >
-                    {specialty}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
+        {profileUser.specialties && profileUser.specialties.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-1">Member since</h4>
-            <p className="text-gray-700">{formatDate(profileUser.createdAt)}</p>
+            <h4 className="font-medium text-gray-900 mb-2">Specialties</h4>
+            <div className="flex flex-wrap gap-2">
+              {profileUser.specialties.map((specialty, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                >
+                  {specialty}
+                </span>
+              ))}
+            </div>
           </div>
+        )}
+
+        <div>
+          <h4 className="font-medium text-gray-900 mb-1">Member since</h4>
+          <p className="text-gray-700">{formatDate(profileUser.createdAt)}</p>
         </div>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
 export default Profile;

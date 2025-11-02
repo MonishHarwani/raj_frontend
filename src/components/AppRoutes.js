@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Layout from "./layout/Layout";
 import LoadingSpinner from "./common/LoadingSpinner";
+import EditProfile from "../pages/EditProfile";
 
 // Lazy load components for better performance
 const Home = React.lazy(() => import("../pages/Home"));
@@ -19,6 +20,7 @@ const CreateJob = React.lazy(() => import("../pages/CreateJob"));
 const Applications = React.lazy(() => import("../pages/Applications"));
 const Chat = React.lazy(() => import("../pages/Chat"));
 const Resumes = React.lazy(() => import("../pages/Resumes"));
+// const Chat = React.lazy(() => import("../pages/Chat"));
 
 // Add job application related components
 // const JobApplications = React.lazy(() => import("../pages/JobApplications")); // Job applications management
@@ -62,18 +64,20 @@ const AppRoutes = () => {
           element={isAuthenticated ? <Layout /> : <Navigate to="/login" />}
         >
           <Route index element={<Dashboard />} />
-          <Route path="profile" element={<Profile />} />
+          <Route path="profile" element={<Profile />} />4
+          <Route path="profile/edit" element={<EditProfile />} />
           <Route path="create-post" element={<CreatePost />} />
           <Route path="create-job" element={<CreateJob />} />
           <Route path="applications" element={<Applications />} />
           <Route path="resumes" element={<Resumes />} />
           <Route path="chat" element={<Chat />} />
           <Route path="chat/:chatId" element={<Chat />} />
-
           {/* Job Application Routes */}
           <Route path="job-applications" element={<Applications />} />
           <Route path="job-applications/:postId" element={<Applications />} />
           <Route path="my-applications" element={<MyApplications />} />
+          <Route path="chat" element={<Chat />} />
+          <Route path="chat/:conversationId" element={<Chat />} />
         </Route>
 
         {/* 404 route */}

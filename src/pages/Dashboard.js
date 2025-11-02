@@ -108,21 +108,21 @@ const Dashboard = () => {
             value={stats.posts}
             icon={Camera}
             color="bg-blue-500"
-            change="+12%"
+            // change="+12%"
           />
           <StatCard
             title="Total Likes"
             value={stats.totalLikes}
             icon={Heart}
             color="bg-red-500"
-            change="+8%"
+            // change="+8%"
           />
           <StatCard
             title="Comments"
             value={stats.totalComments}
             icon={MessageCircle}
             color="bg-green-500"
-            change="+15%"
+            // change="+15%"
           />
           {/* {user.role === "hirer" && (
             <StatCard
@@ -266,11 +266,11 @@ const StatCard = ({ title, value, icon: Icon, color, change }) => (
       <div>
         <p className="text-sm font-medium text-gray-600">{title}</p>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
-        {change && (
+        {/* {change && (
           <p className="text-sm text-green-600 mt-1">
             {change} from last month
           </p>
-        )}
+        )} */}
       </div>
       <div className={`${color} p-3 rounded-lg`}>
         <Icon className="h-6 w-6 text-white" />

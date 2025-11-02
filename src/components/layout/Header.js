@@ -10,12 +10,15 @@ import {
   MessageCircle,
   Bell,
 } from "lucide-react";
+import { useChat } from "../../context/ChatContext";
+// import { MessageCircle } from "lucide-react";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const { totalUnreadCount } = useChat();
 
   const handleLogout = () => {
     logout();
@@ -72,9 +75,15 @@ const Header = () => {
                 {/* Messages */}
                 <Link
                   to="/dashboard/chat"
-                  className="p-2 text-gray-500 hover:text-gray-700"
+                  className="relative inline-flex items-center"
                 >
                   <MessageCircle className="h-5 w-5" />
+                  {totalUnreadCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                      {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
+                    </span>
+                  )}
+                  <span className="ml-2">Messages</span>
                 </Link>
 
                 {/* Profile Dropdown */}
@@ -85,7 +94,7 @@ const Header = () => {
                   >
                     {user.profilePhoto ? (
                       <img
-                        src={user.profilePhoto}
+                        src={"http://localhost:5000" + user.profilePhoto}
                         alt="Profile"
                         className="h-8 w-8 rounded-full object-cover"
                       />
