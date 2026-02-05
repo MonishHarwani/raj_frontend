@@ -108,7 +108,6 @@ const Posts = () => {
       setLikeLoading((prev) => new Set([...prev, postId]));
 
       const response = await api.post(`/posts/${postId}/like`);
-
       // Update post state based on server response
       setPosts((prev) =>
         prev.map((post) =>
@@ -292,7 +291,8 @@ const PostCard = ({
     post.isLikedByCurrentUser ||
     (post.likes && post.likes.some((like) => like.userId === currentUserId));
   console.log(isLikedByCurrentUser);
-  console.log("first");
+  console.log(post.title);
+  // console.log("first");
   // Reset loading state when photo changes
   useEffect(() => {
     setImageLoading(true);
