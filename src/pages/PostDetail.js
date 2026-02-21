@@ -50,7 +50,7 @@ const PostDetail = () => {
       });
 
       setComments((prev) =>
-        prev.map((c) => (c.id === commentId ? res.data.comment : c))
+        prev.map((c) => (c.id === commentId ? res.data.comment : c)),
       );
 
       setEditingCommentId(null);
@@ -69,13 +69,14 @@ const PostDetail = () => {
       setCommentActionLoading(true);
 
       await api.delete(`/posts/comments/${commentId}`);
+      await fetchPost(); // ← THIS is the key
 
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      // setComments((prev) => prev.filter((c) => c.id !== commentId));
 
-      setPost((prev) => ({
-        ...prev,
-        commentsCount: prev.commentsCount - 1,
-      }));
+      // setPost((prev) => ({
+      //   ...prev,
+      //   commentsCount: prev.commentsCount - 1,
+      // }));
     } catch (err) {
       console.error("Delete comment error:", err);
     } finally {
@@ -142,12 +143,12 @@ const PostDetail = () => {
       const res = await api.post(`/posts/${post.id}/comments`, {
         content: newComment.trim(),
       });
-
-      setComments((prev) => [res.data.comment, ...prev]);
-      setPost((prev) => ({
-        ...prev,
-        commentsCount: prev.commentsCount + 1,
-      }));
+      await fetchPost();
+      // setComments((prev) => [res.data.comment, ...prev]);
+      // setPost((prev) => ({
+      //   ...prev,
+      //   commentsCount: prev.commentsCount + 1,
+      // }));
 
       setNewComment("");
     } catch (err) {
@@ -259,7 +260,7 @@ const PostDetail = () => {
 
                 <div className="flex items-center space-x-1 text-gray-500">
                   <MessageCircle className="h-5 w-5" />
-                  <span>{post.commentsCount ?? 0}</span>
+                  <span>{post.comments.length ?? 0}</span>
                 </div>
 
                 <Share2 className="text-gray-500" />
@@ -271,7 +272,7 @@ const PostDetail = () => {
         {/* Comments */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="font-semibold mb-4">
-            Comments ({post.commentsCount ?? 0})
+            Comments ({post.comments.length ?? 0})
           </h3>
 
           {isAuthenticated && (

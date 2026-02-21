@@ -93,7 +93,7 @@ const Posts = () => {
   const handleApplicationSubmitted = (application) => {
     // Update user applications map
     setUserApplications(
-      (prev) => new Map(prev.set(selectedJobPost.id, application))
+      (prev) => new Map(prev.set(selectedJobPost.id, application)),
     );
 
     // Show success message or update UI as needed
@@ -117,8 +117,8 @@ const Posts = () => {
                 likesCount: response.data.likesCount,
                 isLikedByCurrentUser: response.data.isLiked,
               }
-            : post
-        )
+            : post,
+        ),
       );
     } catch (error) {
       console.error("Error liking post:", error);

@@ -18,124 +18,40 @@ export const ChatProvider = ({ children }) => {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+
   const { isAuthenticated, user } = useAuth();
   const { socket, joinChat } = useSocket();
+
+  /* -------------------------------------------------- */
+  /* LOAD CONVERSATIONS */
+  /* -------------------------------------------------- */
+  useEffect(() => {
+    const unlockAudio = () => {
+      const audio = new Audio("/notification.mp3");
+      audio
+        .play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        })
+        .catch(() => {});
+      window.removeEventListener("click", unlockAudio);
+    };
+
+    window.addEventListener("click", unlockAudio);
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
       loadConversations();
     }
   }, [isAuthenticated]);
-
-  useEffect(() => {
-    // Calculate total unread count
-    const total = conversations.reduce(
-      (sum, conv) => sum + (conv.unreadCount || 0),
-      0
-    );
-    setTotalUnreadCount(total);
-  }, [conversations]);
-
-  // Socket event listeners
-  useEffect(() => {
-    if (socket) {
-      // Listen for new messages
-      socket.on("newMessage", (message) => {
-        console.log(
-          "🔥 Received newMessage:",
-          message.id,
-          "for conversation:",
-          message.conversationId
-        );
-
-        // CRITICAL FIX: Check if message is from current user to prevent duplicates
-        const isMyMessage = message.sender?.id === user?.id;
-
-        if (
-          currentConversation &&
-          message.conversationId === currentConversation.id
-        ) {
-          console.log("👍 Adding to current conversation");
-
-          // Only add if it's not my own message (since we already added it optimistically)
-          // OR if we didn't add it yet (safety check)
-          setMessages((prev) => {
-            // Check if message already exists
-            const exists = prev.some((msg) => msg.id === message.id);
-            if (exists) {
-              console.log("⚠️ Message already exists, skipping duplicate");
-              return prev;
-            }
-            return [...prev, message];
-          });
-
-          // Only mark as read if it's not my message
-          if (!isMyMessage) {
-            markAsRead(currentConversation.id);
-          }
-        } else {
-          console.log("📝 Updating sidebar conversation");
-
-          setConversations((prev) => {
-            // 1. Update the right conversation
-            const updated = prev.map((conv) =>
-              conv.id === message.conversationId
-                ? {
-                    ...conv,
-                    unreadCount: isMyMessage
-                      ? conv.unreadCount
-                      : (conv.unreadCount || 0) + 1,
-                    lastMessage: message,
-                    lastMessageAt: message.createdAt,
-                  }
-                : conv
-            );
-            // 2. Sort with latest at top
-            updated.sort(
-              (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
-            );
-            return updated;
-          });
-
-          // 3. Only play sound and show notification for received messages, not sent
-          if (!isMyMessage) {
-            playNotificationSound();
-
-            // 4. Show browser notification (if allowed)
-            if (Notification.permission === "granted") {
-              new Notification("New Message", {
-                body: `${
-                  message?.sender?.firstName || "Someone"
-                }: ${message.content?.slice(0, 50)}`,
-              });
-            }
-          }
-        }
-      });
-
-      // Listen for message read receipts
-      socket.on("messageRead", ({ conversationId, messageId }) => {
-        if (currentConversation && conversationId === currentConversation.id) {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === messageId ? { ...msg, isRead: true } : msg
-            )
-          );
-        }
-      });
-
-      return () => {
-        socket.off("newMessage");
-        socket.off("messageRead");
-      };
-    }
-  }, [socket, currentConversation, user]);
-
   const playNotificationSound = () => {
-    const audio = new window.Audio("/notification.mp3");
+    const audio = new Audio("/notification.mp3");
+    audio.volume = 0.7;
+
     audio.play().catch((err) => {
-      console.log("Audio play blocked!", err);
+      console.log("Sound blocked by browser:", err);
     });
   };
 
@@ -151,16 +67,89 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+  /* -------------------------------------------------- */
+  /* DERIVED TOTAL UNREAD COUNT (NO STATE NEEDED) */
+  /* -------------------------------------------------- */
+
+  const totalUnreadCount = conversations.reduce(
+    (sum, conv) => sum + (conv.unreadCount || 0),
+    0,
+  );
+
+  /* -------------------------------------------------- */
+  /* SOCKET LISTENER (STABLE VERSION) */
+  /* -------------------------------------------------- */
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (message) => {
+      const isMyMessage = message.sender?.id === user?.id;
+
+      setConversations((prev) => {
+        return prev
+          .map((conv) => {
+            if (String(conv.id) !== String(message.conversationId)) {
+              return conv;
+            }
+
+            return {
+              ...conv,
+              unreadCount: isMyMessage
+                ? conv.unreadCount
+                : (conv.unreadCount || 0) + 1,
+              lastMessage: message,
+              lastMessageAt: message.createdAt,
+            };
+          })
+          .sort(
+            (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt),
+          );
+      });
+
+      // 🔔 PLAY SOUND ONLY IF:
+      // - Not my message
+      // - Not currently open chat
+      const isCurrentOpen =
+        currentConversation &&
+        String(currentConversation.id) === String(message.conversationId);
+
+      if (!isMyMessage && !isCurrentOpen) {
+        playNotificationSound();
+      }
+
+      if (isCurrentOpen) {
+        setMessages((prev) => {
+          const exists = prev.some((msg) => msg.id === message.id);
+          if (exists) return prev;
+          return [...prev, message];
+        });
+      }
+    };
+
+    socket.on("newMessage", handleNewMessage);
+
+    return () => {
+      socket.off("newMessage", handleNewMessage);
+    };
+  }, [socket, user?.id, currentConversation?.id]);
+
+  /* -------------------------------------------------- */
+  /* LOAD MESSAGES */
+  /* -------------------------------------------------- */
+
   const loadMessages = async (conversationId, page = 1) => {
     try {
       const response = await api.get(
-        `/messages/conversations/${conversationId}?page=${page}`
+        `/messages/conversations/${conversationId}?page=${page}`,
       );
+
       if (page === 1) {
         setMessages(response.data.messages || []);
       } else {
         setMessages((prev) => [...response.data.messages, ...prev]);
       }
+
       return response.data;
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -168,11 +157,15 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+  /* -------------------------------------------------- */
+  /* SEND MESSAGE */
+  /* -------------------------------------------------- */
+
   const sendMessage = async (
     receiverId,
     content,
     file = null,
-    replyToId = null
+    replyToId = null,
   ) => {
     try {
       const formData = new FormData();
@@ -182,44 +175,35 @@ export const ChatProvider = ({ children }) => {
       if (replyToId) formData.append("replyToId", replyToId);
 
       const response = await api.post("/messages/send", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       const newMessage = response.data.data;
 
-      // IMPORTANT: Add message immediately for better UX (optimistic update)
-      // This message will be deduplicated in the socket listener if it comes back
+      // Optimistic UI update
       if (currentConversation) {
         setMessages((prev) => {
-          // Check if already exists (shouldn't, but safety check)
           const exists = prev.some((msg) => msg.id === newMessage.id);
           if (exists) return prev;
           return [...prev, newMessage];
         });
       }
 
-      // Update conversations list - move this conversation to top
-      setConversations((prev) => {
-        const updated = prev.map((conv) =>
-          conv.id === newMessage.conversationId
-            ? {
-                ...conv,
-                lastMessage: newMessage,
-                lastMessageAt: newMessage.createdAt,
-              }
-            : conv
-        );
-        updated.sort(
-          (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
-        );
-        return updated;
-      });
-
-      // Socket emission is handled by backend, no need to emit here
-      // The backend will broadcast to other users, and we'll receive it via 'newMessage' event
-      // But we use the duplicate check to prevent adding it twice
+      setConversations((prev) =>
+        prev
+          .map((conv) =>
+            String(conv.id) === String(newMessage.conversationId)
+              ? {
+                  ...conv,
+                  lastMessage: newMessage,
+                  lastMessageAt: newMessage.createdAt,
+                }
+              : conv,
+          )
+          .sort(
+            (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt),
+          ),
+      );
 
       return newMessage;
     } catch (error) {
@@ -228,41 +212,56 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+  /* -------------------------------------------------- */
+  /* MARK AS READ */
+  /* -------------------------------------------------- */
+
   const markAsRead = async (conversationId) => {
     try {
       await api.patch(`/messages/conversations/${conversationId}/read`);
 
-      // Update conversations list to reflect read status
       setConversations((prev) =>
         prev.map((conv) =>
-          conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-        )
+          String(conv.id) === String(conversationId)
+            ? { ...conv, unreadCount: 0 }
+            : conv,
+        ),
       );
 
-      // Mark messages as read in current conversation
-      if (currentConversation?.id === conversationId) {
-        setMessages((prev) => prev.map((msg) => ({ ...msg, isRead: true })));
+      if (
+        currentConversation &&
+        String(currentConversation.id) === String(conversationId)
+      ) {
+        setMessages((prev) =>
+          prev.map((msg) => ({
+            ...msg,
+            isRead: true,
+          })),
+        );
       }
 
-      // Emit read receipt via socket
       if (socket) {
         socket.emit("messageRead", { conversationId });
       }
     } catch (error) {
-      console.error("Error marking messages as read:", error);
+      console.error("Error marking as read:", error);
     }
   };
+
+  /* -------------------------------------------------- */
+  /* START CONVERSATION */
+  /* -------------------------------------------------- */
 
   const startConversation = async (userId) => {
     try {
       const response = await api.post("/messages/conversations/start", {
         userId,
       });
+
       const conversation = response.data.conversation;
 
-      // Add to conversations if not exists
       setConversations((prev) => {
-        const exists = prev.find((conv) => conv.id === conversation.id);
+        const exists = prev.find((c) => c.id === conversation.id);
         if (exists) return prev;
         return [conversation, ...prev];
       });
@@ -274,11 +273,14 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+  /* -------------------------------------------------- */
+  /* SELECT CONVERSATION */
+  /* -------------------------------------------------- */
+
   const selectConversation = async (conversation) => {
     setCurrentConversation(conversation);
     setMessages([]);
 
-    // Join socket room for this conversation
     if (socket) {
       joinChat(conversation.id);
     }
@@ -286,6 +288,10 @@ export const ChatProvider = ({ children }) => {
     await loadMessages(conversation.id);
     await markAsRead(conversation.id);
   };
+
+  /* -------------------------------------------------- */
+  /* CONTEXT VALUE */
+  /* -------------------------------------------------- */
 
   const value = {
     conversations,

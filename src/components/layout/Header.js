@@ -19,6 +19,7 @@ const Header = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const { totalUnreadCount } = useChat();
+  console.log("UNRead Count ", totalUnreadCount);
 
   const handleLogout = () => {
     logout();
